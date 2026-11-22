@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neuron</title>
+<style>
+  body { font-family: sans-serif; background: #0e1621; color: #e6edf3; margin: 0; padding: 15px; height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+  input, button, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #243447; background: #17212b; color: white; font-size: 16px; box-sizing: border-box; outline: none; font-family: inherit; }
+  button { background: #2b5278; border: none; cursor: pointer; font-weight: bold; }
+  
+  #app { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  #chatList { flex: 1; overflow-y: auto; padding-bottom: 70px; }
+  .chat-item { padding: 15px; background: #17212b; margin-bottom: 8px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 45px; height: 45px; border-radius: 50%; background: #2b5278; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .chat-name { font-weight: bold; font-size: 16px; }
+  .chat-bio { font-size: 13px; color: #7d8b99; }
+  
+  #chatScreen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; background: #17212b; padding: 10px; border-radius: 10px; }
+  .chat-header button { width: auto; padding: 8px; margin: 0; background: transparent; font-size: 20px; }
+  #messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 10px 14px; border-radius: 14px; max-width: 80%; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
+  .msg.me { background: #2b5278; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.them { background: #182533; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg img { max-width: 100%; border-radius: 8px; margin-top: 5px; }
+  .msg .sender { font-size: 12px; color: #58a6ff; font-weight: bold; margin-bottom: 3px; }
+  
+  .input-row { display: flex; gap: 5px; align-items: flex-end; }
+  .input-row input[type="text"] { margin: 0; }
+  .input-row button { width: auto; margin: 0; padding: 12px; }
+  .attach-btn { background: #243447; font-size: 20px; }
+  
+  /* Модалки */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; padding: 20px; z-index: 100; }
+  .modal.show { display: flex; }
+  .modal-box { background: #17212b; padding: 20px; border-radius: 16px; }
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <h2 style="text-align:center;">Neuron</h2>
+  <input id="login" placeholder="Логин">
+  <input id="pass" type="password" placeholder="Пароль">
+  <button onclick="reg()">Зарегистрироваться</button>
+  <button onclick="log()" style="background:#1c2a3a;">Войти</button>
+  <p id="error" style="color:red; text-align:center;"></p>
+</div>
+
+<div id="app" class="hidden">
+  <!-- СПИСОК ЧАТОВ -->
+  <div id="listScreen" style="display:flex; flex-direction:column; height:100%;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 style="margin:0;" onclick="openProfile()">Мой профиль ⚙️</h3>
+      <button onclick="openSearch()" style="width:auto; padding:8px 12px; background:#243447;">🔍 Поиск</button>
+    </div>
+    <div style="display:flex; gap:5px; margin-bottom:10px;">
+      <button onclick="createChat('chat')" style="padding:8px; font-size:14px;">+ Чат</button>
+      <button onclick="createChat('channel')" style="padding:8px; font-size:14px; background:#6d28d9;">+ Канал</button>
+      <button onclick="logout()" style="padding:8px; font-size:14px; background:#7a2b2b; width:auto;">Выйти</button>
+    </div>
+    <div id="chatList"></div>
+  </div>
+
+  <!-- ЭКРАН ЧАТА -->
+  <div id="chatScreen" class="hidden">
+    <div class="chat-header">
+      <button onclick="backToList()">←</button>
+      <div class="avatar" id="chatAvatar"></div>
+      <div style="flex:1;">
+        <div class="chat-name" id="chatWith"></div>
+        <div class="chat-bio" id="chatBio"></div>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <div class="input-row">
+      <button class="attach-btn" onclick="sendFile()">📎</button>
+      <input id="msgInput" placeholder="Сообщение...">
+      <button onclick="send()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка профиля -->
+<div class="modal" id="profileModal">
+  <div class="modal-box">
+    <h3>Мой профиль</h3>
+    <p>Аватар (URL):</p>
+    <input id="profAvatar" placeholder="https://...">
+    <p>О себе:</p>
+    <textarea id="profBio" rows="3"></textarea>
+    <button onclick="saveProfile()">Сохранить</button>
+    <button onclick="closeModal('profileModal')" style="background:#243447; margin-top:5px;">Отмена</button>
+  </div>
+</div>
+
+<!-- Модалка поиска -->
+<div class="modal" id="searchModal">
+  <div class="modal-box">
+    <h3>Поиск людей</h3>
+    <input id="searchInput" placeholder="Введите логин..." oninput="doSearch()">
+    <div id="searchResults"></div>
+    <button onclick="closeModal('searchModal')" style="background:#243447; margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const err = document.getElementById('error');
+let myLogin = "";
+let currentChatId = "";
+let currentChatTarget = "";
+let myChats = [];
+
+function reg() {
+  const login = document.getElementById('login').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  if(!login || !pass) return err.innerText = "Заполните всё";
+  socket.emit('register', { login, pass });
+}
+function log() {
+  const login = document.getElementById('login').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  socket.emit('login', { login, pass });
+}
+function logout() { location.reload(); }
+
+socket.on('registered', () => { err.innerText = "Готово! Теперь нажми Войти"; err.style.color = "green"; });
+socket.on('error', (msg) => { err.innerText = msg; err.style.color = "red"; });
+
+socket.on('logged_in', (user) => {
+  myLogin = user.login;
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  socket.emit('get_chats');
+});
+
+socket.on('chats_list', (chats) => {
+  myChats = chats || [];
+  renderChats();
+});
+
+function renderChats() {
+  const box = document.getElementById('chatList');
+  box.innerHTML = "";
+  if (myChats.length === 0) return box.innerHTML = "<p style='color:#7d8b99; text-align:center;'>Нет чатов. Создайте первый!</p>";
+  
+  myChats.forEach(c => {
+    const div = document.createElement('div');
+    div.className = "chat-item";
+    div.onclick = () => openChat(c.id, c.name, c.bio, c.avatar);
+    
+    const isChan = c.type === 'channel';
+    const isBot = c.type === 'bot';
+    div.innerHTML = `
+      <div class="avatar">${c.avatar ? `<img src="${c.avatar}">` : c.name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1;">
+        <div class="chat-name">${c.name} ${isChan ? '📢' : isBot ? '🤖' : ''}</div>
+        <div class="chat-bio">${c.bio || 'Нет описания'}</div>
+      </div>
+    `;
+    box.appendChild(div);
+  });
+}
+
+// Открыть модалку профиля
+function openProfile() {
+  const user = myChats.find(c => c.name === myLogin); // хак для получения данных
+  socket.emit('get_chats'); // запрашиваем данные профиля (упрощенно)
+  document.getElementById('profileModal').classList.add('show');
+}
+function saveProfile() {
+  const bio = document.getElementById('profBio').value;
+  const avatar = document.getElementById('profAvatar').value;
+  socket.emit('update_profile', { bio, avatar });
+  closeModal('profileModal');
+}
+socket.on('profile_updated', () => { alert("Профиль обновлен!"); socket.emit('get_chats'); });
+
+// Поиск
+function openSearch() { document.getElementById('searchModal').classList.add('show'); }
+function doSearch() {
+  const q = document.getElementById('searchInput').value;
+  if (q.length < 1) return;
+  socket.emit('search_users', q);
+}
+socket.on('search_results', (users) => {
+  const box = document.getElementById('searchResults');
+  box.innerHTML = "";
+  if (users.length === 0) return box.innerHTML = "<p style='color:#7d8b99;'>Никого не найдено</p>";
+  
+  users.forEach(u => {
+    const div = document.createElement('div');
+    div.className = "chat-item";
+    div.innerHTML = `<div class="avatar">${u.avatar ? `<img src="${u.avatar}">` : u.login.charAt(0).toUpperCase()}</div><div style="flex:1;"><div class="chat-name">@${u.login}</div><div class="chat-bio">${u.bio || ''}</div></div>`;
+    div.onclick = () => {
+      socket.emit('create_chat', { type: 'chat', name: u.login, target: u.login });
+      closeModal('searchModal');
+    };
+    box.appendChild(div);
+  });
+});
+
+function createChat(type) {
+  if (type === 'channel') {
+    const name = prompt("Название канала:");
+    if (name) socket.emit('create_chat', { type: 'channel', name });
+  } else {
+    openSearch(); // Личный чат создается через поиск
+  }
+}
+
+socket.on('chat_created', () => { socket.emit('get_chats'); });
+
+function openChat(id, name, bio, avatar) {
+  currentChatId = id;
+  currentChatTarget = name;
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  document.getElementById('chatWith').innerText = name;
+  document.getElementById('chatBio').innerText = bio || '';
+  const av = document.getElementById('chatAvatar');
+  av.innerHTML = avatar ? `<img src="${avatar}">` : name.charAt(0).toUpperCase();
+  
+  socket.emit('join_chat', id);
+}
+
+socket.on('messages_history', (msgs) => {
+  const box = document.getElementById('messages');
+  box.innerHTML = "";
+  msgs.forEach(m => renderMsg(m));
+});
+
+socket.on('new_message', (m) => renderMsg(m));
+
+function renderMsg(m) {
+  const box = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (m.sender === myLogin ? 'me' : 'them');
+  
+  let content = m.sender !== myLogin ? `<div class="sender">${m.sender}</div>` : '';
+  if (m.type === 'image') {
+    content += `<img src="${m.file_url}">`;
+  } else {
+    content += `<div>${m.text}</div>`;
+  }
+  div.innerHTML = content;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function backToList() {
+  currentChatId = "";
+  document.getElementById('chatScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+  socket.emit('get_chats');
+}
+
+function send() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if(!text || !currentChatId) return;
+  socket.emit('send_message', { chatId: currentChatId, text: text, type: 'text' });
+  input.value = "";
+}
+
+function sendFile() {
+  const url = prompt("Введите прямую ссылку на фото (URL):");
+  if (!url) return;
+  socket.emit('send_message', { chatId: currentChatId, type: 'image', file_url: url });
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+</script>
+</body>
+        </html>
