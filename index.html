@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neuron</title>
+<style>
+  :root { --bg: #0e1621; --bg2: #17212b; --bg3: #1c2a3a; --text: #e6edf3; --muted: #7d8b99; --accent: #2b5278; --me: #2b5278; --them: #182533; --border: #243447; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; height: 100dvh; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+  input, button { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 16px; outline: none; }
+  button { background: var(--accent); color: white; border: none; cursor: pointer; font-weight: bold; }
+  
+  #app { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: var(--bg2); padding: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+  .topbar .title { flex: 1; font-size: 20px; font-weight: 700; }
+  .topbar button { width: auto; padding: 8px 12px; margin: 0; font-size: 14px; background: var(--bg3); }
+
+  #chatList { flex: 1; overflow-y: auto; padding: 10px; }
+  .chat-item { padding: 12px; background: var(--bg2); margin-bottom: 8px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); }
+  .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; color: white; }
+  .chat-info { flex: 1; min-width: 0; }
+  .chat-name { font-weight: bold; font-size: 16px; }
+
+  #chatScreen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { background: var(--bg2); padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+  .chat-header button { width: auto; padding: 8px; margin: 0; background: transparent; font-size: 20px; color: var(--text); }
+  
+  #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 80%; padding: 8px 12px; font-size: 15px; border-radius: 14px; position: relative; }
+  .msg.me { background: var(--me); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.them { background: var(--them); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+  .msg .sender { font-size: 12px; color: #58a6ff; font-weight: bold; margin-bottom: 2px; }
+  .msg .time { font-size: 10px; color: var(--muted); text-align: right; margin-top: 4px; display: block; }
+  .msg .reactions { display: flex; gap: 4px; margin-top: 4px; }
+  .msg .reactions span { background: var(--bg); padding: 2px 6px; border-radius: 10px; font-size: 12px; }
+  .pinned-msg { background: var(--bg3); padding: 8px 15px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+
+  .input-bar { background: var(--bg2); padding: 10px; display: flex; gap: 8px; border-top: 1px solid var(--border); }
+  .input-bar input { margin: 0; border-radius: 20px; }
+  .input-bar button { width: auto; padding: 12px 20px; margin: 0; border-radius: 20px; }
+
+  /* Меню действий */
+  #actionMenu { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 300; }
+  #actionMenu.show { display: flex; }
+  .action-box { background: var(--bg2); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; width: 250px; }
+  .action-box button { background: var(--bg3); color: var(--text); }
+  .action-box .reactions-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .action-box .reactions-row span { font-size: 24px; cursor: pointer; }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; padding: 20px; z-index: 100; }
+  .modal.show { display: flex; }
+  .modal-box { background: var(--bg2); padding: 20px; border-radius: 16px; max-height: 80vh; overflow-y: auto; }
+  
+  .profile-header { display: flex; flex-direction: column; align-items: center; }
+  .profile-avatar { width: 100px; height: 100px; border-radius: 50%; background: var(--bg3); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 10px; cursor: pointer; border: 2px solid var(--accent); }
+  .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .profile-gifts { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+  .gift-icon { font-size: 24px; background: var(--bg3); padding: 5px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <h2 style="text-align:center;">Neuron</h2>
+  <input id="nick" placeholder="Введите ваш ник">
+  <button onclick="login()">Войти</button>
+  <p id="error" style="color:red; text-align:center;"></p>
+</div>
+
+<div id="app" class="hidden">
+  <div id="listScreen" style="display:flex; flex-direction:column; height:100%;">
+    <div class="topbar">
+      <div class="title">Чаты</div>
+      <button onclick="openMyProfile()">👤</button>
+      <button onclick="openGiftShop()">🎁</button>
+      <button onclick="logout()" style="background:#7a2b2b;">Выйти</button>
+    </div>
+    <div id="chatList"></div>
+  </div>
+
+  <div id="chatScreen" class="hidden">
+    <div class="chat-header">
+      <button onclick="backToList()">←</button>
+      <div class="chat-info" onclick="openUserProfile(currentChatTarget)">
+        <div class="chat-name" id="chatWith"></div>
+      </div>
+    </div>
+    <div id="pinnedBar" class="pinned-msg hidden"></div>
+    <div id="messages"></div>
+    <div class="input-bar">
+      <input id="msgInput" placeholder="Сообщение...">
+      <button onclick="send()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Меню действий -->
+<div id="actionMenu" onclick="closeActionMenu()">
+  <div class="action-box" onclick="event.stopPropagation()">
+    <div class="reactions-row">
+      <span onclick="doAction('react', '👍')">👍</span>
+      <span onclick="doAction('react', '❤️')">❤️</span>
+      <span onclick="doAction('react', '😂')">😂</span>
+      <span onclick="doAction('react', '🔥')">🔥</span>
+    </div>
+    <button onclick="doAction('reply')">Ответить</button>
+    <button onclick="doAction('pin')">Закрепить</button>
+    <button onclick="doAction('delete')" style="color:#f85149;">Удалить</button>
+  </div>
+</div>
+
+<!-- Профиль -->
+<div class="modal" id="profileModal">
+  <div class="modal-box">
+    <div class="profile-header">
+      <div class="profile-avatar" id="profAvatar" onclick="uploadAvatar()">
+        <span id="profAvatarText">?</span>
+      </div>
+      <h3 id="profNick">Nick</h3>
+      <p id="profBio">Bio</p>
+      <p style="color:gold;">⭐ <span id="profStars">0</span> звёзд</p>
+      <div class="profile-gifts" id="profGifts"></div>
+    </div>
+    <h4>Действия</h4>
+    <button onclick="buyPremium(1)">Премиум 1 мес (1000 ⭐)</button>
+    <button onclick="buyPremium(3)">Премиум 3 мес (5000 ⭐)</button>
+    <button onclick="buyPremium(12)">Премиум год (50000 ⭐)</button>
+    <button onclick="createBot()">Создать бота</button>
+    <button onclick="closeModal('profileModal')" style="background:var(--bg3);">Закрыть</button>
+  </div>
+</div>
+
+<!-- Магазин подарков -->
+<div class="modal" id="giftModal">
+  <div class="modal-box">
+    <h3>Магазин подарков</h3>
+    <div id="giftList" style="display:flex; flex-direction:column; gap:5px;"></div>
+    <button onclick="closeModal('giftModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<!-- Окно выбора скина -->
+<div class="modal" id="skinModal">
+  <div class="modal-box">
+    <h3 id="skinTitle">Выберите скин</h3>
+    <div id="skinList"></div>
+    <button onclick="closeModal('skinModal')" style="background:var(--bg3); margin-top:10px;">Отмена</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let myNick = "", currentChatId = "", currentChatTarget = "";
+let myProfile = {}, actionMsgId = null, currentGiftId = null;
+
+function login() { 
+  const nick = document.getElementById('nick').value.trim();
+  if(nick.length >= 3) socket.emit('login_nick', nick); 
+}
+socket.on('error', (m) => document.getElementById('error').innerText = m);
+
+socket.on('logged_in', (nick) => {
+  myNick = nick;
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  socket.emit('get_chats');
+  socket.emit('get_profile', myNick);
+});
+
+socket.on('chats_list', (chats) => {
+  const box = document.getElementById('chatList');
+  box.innerHTML = "";
+  chats.forEach(c => {
+    const div = document.createElement('div');
+    div.className = "chat-item";
+    div.onclick = () => openChat(c.id, c.name, c.members);
+    div.innerHTML = `<div class="avatar">${c.name.charAt(0).toUpperCase()}</div><div class="chat-info"><div class="chat-name">${c.name}</div></div>`;
+    box.appendChild(div);
+  });
+});
+
+function openChat(id, name, members) {
+  currentChatId = id;
+  currentChatTarget = members ? members.split(',').find(m => m !== myNick && m !== 'system') : "";
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  document.getElementById('chatWith').innerText = name;
+  socket.emit('join_chat', id);
+}
+
+socket.on('messages_history', (msgs) => {
+  const box = document.getElementById('messages');
+  box.innerHTML = "";
+  let pinnedMsg = null;
+  msgs.forEach(m => { if(m.pinned) pinnedMsg = m; renderMsg(m); });
+  updatePinnedBar(pinnedMsg);
+});
+
+socket.on('new_message', (m) => { if (currentChatId === m.chat_id) renderMsg(m); });
+
+function renderMsg(m) {
+  const box = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (m.sender === myNick ? 'me' : 'them');
+  
+  let content = m.sender !== myNick ? `<div class="sender">${m.sender}</div>` : '';
+  content += `<div>${m.text}</div>`;
+  
+  const time = new Date(m.ts || Date.now());
+  content += `<span class="time">${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}</span>`;
+  
+  if (m.reactions) {
+    const rs = JSON.parse(m.reactions);
+    content += `<div class="reactions">${Object.values(rs).map(r => `<span>${r}</span>`).join('')}</div>`;
+  }
+
+  div.innerHTML = content;
+
+  let pressTimer;
+  div.addEventListener('touchstart', () => { pressTimer = setTimeout(() => openActionMenu(m.id), 500); });
+  div.addEventListener('touchend', () => clearTimeout(pressTimer));
+  div.addEventListener('mousedown', () => { pressTimer = setTimeout(() => openActionMenu(m.id), 500); });
+  div.addEventListener('mouseup', () => clearTimeout(pressTimer));
+
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Меню действий
+function openActionMenu(msgId) { actionMsgId = msgId; document.getElementById('actionMenu').classList.add('show'); }
+function closeActionMenu() { document.getElementById('actionMenu').classList.remove('show'); }
+function doAction(type, val) {
+  closeActionMenu();
+  if (!actionMsgId) return;
+  if (type === 'react') socket.emit('add_reaction', { chatId: currentChatId, msgId: actionMsgId, reaction: val });
+  if (type === 'delete') socket.emit('delete_message', { chatId: currentChatId, msgId: actionMsgId });
+  if (type === 'pin') socket.emit('pin_message', { chatId: currentChatId, msgId: actionMsgId });
+  if (type === 'reply') { alert("Функция ответа в разработке"); }
+}
+
+socket.on('message_reaction', () => socket.emit('join_chat', currentChatId));
+socket.on('message_deleted', () => socket.emit('join_chat', currentChatId));
+socket.on('message_pinned', () => socket.emit('join_chat', currentChatId));
+
+function updatePinnedBar(m) {
+  const bar = document.getElementById('pinnedBar');
+  if (m) { bar.innerText = `📌 ${m.text}`; bar.classList.remove('hidden'); }
+  else bar.classList.add('hidden');
+}
+
+function send() {
+  const input = document.getElementById('msgInput');
+  if (!input.value.trim()) return;
+  socket.emit('send_message', { chatId: currentChatId, text: input.value, type: 'text' });
+  input.value = "";
+}
+
+// Профиль
+function openMyProfile() { socket.emit('get_profile', myNick); document.getElementById('profileModal').classList.add('show'); }
+function openUserProfile(nick) { socket.emit('get_profile', nick); document.getElementById('profileModal').classList.add('show'); }
+
+socket.on('profile_data', ({ user, gifts, allGifts }) => {
+  myProfile = user;
+  document.getElementById('profNick').innerText = user.nick;
+  document.getElementById('profBio').innerText = user.bio || "";
+  document.getElementById('profStars').innerText = user.stars;
+  
+  const ava = document.getElementById('profAvatar');
+  if (user.avatar) ava.innerHTML = `<img src="${user.avatar}">`;
+  else ava.innerText = user.nick.charAt(0).toUpperCase();
+  
+  const giftBox = document.getElementById('profGifts');
+  giftBox.innerHTML = "";
+  gifts.forEach(g => {
+    const span = document.createElement('span');
+    span.className = 'gift-icon';
+    span.innerText = allGifts[g.gift_id] ? allGifts[g.gift_id].name.split(' ')[0] : '🎁';
+    giftBox.appendChild(span);
+  });
+  
+  // Обновляем магазин
+  const gl = document.getElementById('giftList');
+  gl.innerHTML = "";
+  Object.entries(allGifts).forEach(([id, data]) => {
+    const btn = document.createElement('button');
+    btn.innerText = `${data.name} — ${data.price} ⭐`;
+    btn.onclick = () => openSkinSelection(id, data);
+    gl.appendChild(btn);
+  });
+});
+
+function uploadAvatar() {
+  const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+  input.onchange = () => {
+    const reader = new FileReader();
+    reader.onload = () => socket.emit('update_profile', { avatar: reader.result, bio: document.getElementById('profBio').innerText });
+    reader.readAsDataURL(input.files[0]);
+  };
+  input.click();
+}
+
+// Подарки
+function openGiftShop() { document.getElementById('giftModal').classList.add('show'); }
+function openSkinSelection(giftId, data) {
+  currentGiftId = giftId;
+  document.getElementById('skinTitle').innerText = `Скин для ${data.name}`;
+  const sl = document.getElementById('skinList');
+  sl.innerHTML = "";
+  data.skins.forEach(skin => {
+    const btn = document.createElement('button');
+    btn.innerText = skin;
+    btn.onclick = () => { socket.emit('buy_gift', { to: myNick, giftId, skin }); closeModal('skinModal'); };
+    sl.appendChild(btn);
+  });
+  document.getElementById('skinModal').classList.add('show');
+}
+
+socket.on('premium_bought', () => alert("Премиум активирован!"));
+socket.on('gift_bought', () => { alert("Подарок куплен!"); socket.emit('get_profile', myNick); });
+socket.on('profile_updated', () => { alert("Профиль обновлен"); socket.emit('get_profile', myNick); });
+
+function createBot() {
+  const name = prompt("Имя бота:");
+  const persona = prompt("Характер (веселый, злой...):");
+  if (name) socket.emit('create_bot', { name, persona });
+}
+socket.on('bot_created', () => { alert("Бот создан!"); socket.emit('get_chats'); });
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function backToList() { currentChatId = ""; document.getElementById('chatScreen').classList.add('hidden'); document.getElementById('listScreen').classList.remove('hidden'); socket.emit('get_chats'); }
+function logout() { location.reload(); }
+</script>
+</body>
+    </html>
