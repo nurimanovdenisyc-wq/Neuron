@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neuron</title>
+<style>
+  :root { --bg: #0e1621; --bg2: #17212b; --bg3: #1c2a3a; --text: #e6edf3; --muted: #7d8b99; --accent: #2b5278; --me: #2b5278; --them: #182533; --border: #243447; }
+  body.light { --bg: #f0f2f5; --bg2: #ffffff; --bg3: #e4e8ec; --text: #1a1a1a; --muted: #6a737d; --accent: #d9ebff; --me: #d9ebff; --them: #ffffff; --border: #d0d7de; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; height: 100dvh; display: flex; flex-direction: column; transition: background 0.3s; }
+  .hidden { display: none !important; }
+  input, button, textarea { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 16px; outline: none; direction: ltr; text-align: left; }
+  button { background: var(--accent); color: white; border: none; cursor: pointer; font-weight: bold; }
+  #app { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: var(--bg2); padding: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+  .topbar .title { flex: 1; font-size: 20px; font-weight: 700; }
+  .topbar button { width: auto; padding: 8px 12px; margin: 0; font-size: 14px; background: var(--bg3); }
+
+  #chatList { flex: 1; overflow-y: auto; padding: 10px; }
+  .chat-item { padding: 12px; background: var(--bg2); margin-bottom: 8px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); }
+  .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; color: white; position: relative; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .online-dot { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background: #238636; border-radius: 50%; border: 2px solid var(--bg2); }
+  .chat-info { flex: 1; min-width: 0; }
+  .chat-name { font-weight: bold; font-size: 16px; }
+  .chat-last { font-size: 13px; color: var(--muted); }
+
+  #chatScreen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { background: var(--bg2); padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+  .chat-header button { width: auto; padding: 8px; margin: 0; background: transparent; font-size: 20px; color: var(--text); }
+  #chatBio { font-size: 12px; color: var(--muted); }
+
+  #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px;
+    background-color: var(--bg);
+    position: relative;
+  }
+  #wallLayer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+    background-size: cover; background-position: center; pointer-events: none;
+    transition: filter 0.3s;
+  }
+
+  .msg { max-width: 80%; padding: 10px 14px; font-size: 15px; line-height: 1.4; word-wrap: break-word; position: relative; direction: ltr; text-align: left; z-index: 1; }
+  .msg.me { background: var(--me); align-self: flex-end; color: white; }
+  .msg.them { background: var(--them); align-self: flex-start; border: 1px solid var(--border); }
+  .msg .sender { font-size: 12px; color: #58a6ff; font-weight: bold; margin-bottom: 4px; cursor: pointer; }
+  .msg .reply-quote { background: rgba(0,0,0,0.2); border-left: 3px solid #58a6ff; padding: 4px 8px; font-size: 12px; margin-bottom: 5px; border-radius: 4px; }
+  .msg .reactions { display: flex; gap: 4px; margin-top: 4px; }
+  .msg .reactions span { background: var(--bg); padding: 2px 6px; border-radius: 10px; font-size: 12px; border: 1px solid var(--border); }
+  .msg img.sticker { width: 100px; height: 100px; object-fit: contain; }
+
+  .msg.me.bubble-default { border-radius: 16px 16px 4px 16px; }
+  .msg.them.bubble-default { border-radius: 16px 16px 16px 4px; }
+  .msg.bubble-round { border-radius: 22px; }
+  .msg.bubble-sharp { border-radius: 4px; }
+  .msg.me.bubble-neon { background: #0f0f1a; color: #00ffcc; border: 1px solid #00ffcc; border-radius: 12px; box-shadow: 0 0 8px #00ffcc55; }
+  .msg.them.bubble-neon { background: #0f0f1a; color: #ff66cc; border: 1px solid #ff66cc; border-radius: 12px; box-shadow: 0 0 8px #ff66cc55; }
+  .msg.me.bubble-paper { background: #fdf6e3; color: #333; border: 1px solid #e0d6b8; border-radius: 8px; }
+  .msg.them.bubble-paper { background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; }
+  .msg.me.bubble-glass { background: rgba(43, 82, 120, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px 16px 4px 16px; }
+  .msg.them.bubble-glass { background: rgba(24, 37, 51, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px 16px 16px 4px; }
+  .msg.me.bubble-gold { background: linear-gradient(135deg, #f5c518, #d4af37); color: #1a1a1a; border-radius: 12px; font-weight: bold; }
+  .msg.them.bubble-gold { background: linear-gradient(135deg, #d4af37, #f5c518); color: #1a1a1a; border-radius: 12px; font-weight: bold; }
+  .msg.me.bubble-sakura { background: #ffb7c5; color: #4a1525; border: 1px solid #ff9eb2; border-radius: 18px 18px 4px 18px; }
+  .msg.them.bubble-sakura { background: #ffe3e8; color: #4a1525; border: 1px solid #ffc2cd; border-radius: 18px 18px 18px 4px; }
+  .msg.me.bubble-matrix { background: #000; color: #0f0; border: 1px solid #0f0; border-radius: 4px; font-family: monospace; box-shadow: 0 0 5px #0f0555; }
+  .msg.them.bubble-matrix { background: #000; color: #0f0; border: 1px solid #0f0; border-radius: 4px; font-family: monospace; box-shadow: 0 0 5px #0f0555; }
+
+  .input-bar { background: var(--bg2); padding: 8px 10px; display: flex; gap: 8px; align-items: flex-end; border-top: 1px solid var(--border); position: relative; z-index: 10; }
+  .input-bar button { width: auto; padding: 12px; margin: 0; border-radius: 50%; font-size: 20px; background: var(--bg3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; height: 44px; width: 44px; }
+  .input-bar input { margin: 0; border-radius: 20px; padding: 12px 16px; resize: none; max-height: 120px; min-height: 44px; flex: 1; }
+  .input-bar .send-btn { background: var(--accent); color: white; }
+
+  .attach-menu { position: absolute; bottom: 60px; left: 10px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; display: none; flex-direction: column; padding: 5px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .attach-menu.show { display: flex; }
+  .attach-menu button { background: transparent; color: var(--text); width: 44px; height: 44px; border-radius: 8px; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .attach-menu button:hover { background: var(--bg3); }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; padding: 20px; z-index: 100; }
+  .modal.show { display: flex; }
+  .modal-box { background: var(--bg2); padding: 20px; border-radius: 16px; max-height: 80vh; overflow-y: auto; }
+
+  .sticker-panel { display: none; grid-template-columns: repeat(4, 1fr); gap: 10px; background: var(--bg2); padding: 10px; border-radius: 12px; margin: 0 10px 10px; border: 1px solid var(--border); }
+  .sticker-panel.show { display: grid; }
+  .sticker-panel img { width: 100%; height: 60px; object-fit: contain; cursor: pointer; }
+  .sticker-panel button { font-size: 20px; padding: 5px; background: var(--bg3); }
+
+  #callModal { background: #000; display: none; position: fixed; inset: 0; z-index: 200; }
+  #callModal.show { display: block; }
+  #callSplit { position: absolute; inset: 0; }
+  #callTitle { position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px; z-index: 10; }
+
+  #videoNoteModal { background: #000; display: none; position: fixed; inset: 0; z-index: 250; }
+  #videoNoteModal.show { display: block; }
+  #videoNotePreview { width: 100%; height: 100%; object-fit: cover; }
+
+  .profile-header { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 15px; }
+  .profile-avatar { width: 90px; height: 90px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 36px; color: white; overflow: hidden; }
+  .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .theme-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .theme-row button { width: auto; padding: 8px 12px; margin: 0; }
+
+  .game-area { position: relative; height: 300px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+  .game-target { position: absolute; width: 50px; height: 50px; border-radius: 50%; background: #f5c518; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <h2 style="text-align:center;">Neuron</h2>
+  <input id="nick" placeholder="Ник (мин. 3 символа)" autocomplete="username" dir="ltr">
+  <input id="password" type="password" placeholder="Пароль (мин. 4 символа)" autocomplete="current-password" dir="ltr">
+  <button onclick="doAuth('/api/login')">Войти</button>
+  <button onclick="doAuth('/api/register')" style="background:#6d28d9;">Зарегистрироваться</button>
+  <p id="error" style="color:red; text-align:center;"></p>
+</div>
+
+<div id="app" class="hidden">
+  <div id="listScreen" style="display:flex; flex-direction:column; height:100%;">
+    <div class="topbar">
+      <div class="title">Чаты</div>
+      <button onclick="openProfile(myNick)">👤</button>
+      <button onclick="openGifts()">🎁</button>
+      <button onclick="toggleTheme()">🌓</button>
+      <button onclick="logout()" style="background:#7a2b2b;">Выйти</button>
+    </div>
+    <div style="display:flex; gap:8px; padding: 10px;">
+      <button onclick="openSearch()">🔍 Поиск</button>
+      <button onclick="createGroup()" style="background:#6d28d9;">+ Группа</button>
+      <button id="devBtn" class="hidden" onclick="openDevPanel()" style="background:#8b5cf6;">DEV</button>
+    </div>
+    <div id="chatList"></div>
+  </div>
+
+  <div id="chatScreen" class="hidden">
+    <div class="chat-header">
+      <button onclick="backToList()">←</button>
+      <div class="avatar" id="chatAvatar" style="width:40px; height:40px; font-size:16px;"></div>
+      <div style="flex:1;">
+        <div class="chat-name" id="chatWith"></div>
+        <div id="chatBio"></div>
+      </div>
+      <button onclick="document.getElementById('wallModal').classList.add('show')">🖼</button>
+      <button onclick="openBubblePicker()">💬</button>
+      <button onclick="openChatTheme()">🎨</button>
+      <button onclick="startCall()" style="background:#238636; border-radius:50%;">📞</button>
+    </div>
+
+    <div class="sticker-panel" id="stickerPanel">
+      <button onclick="addNewSticker()" style="grid-column: span 4; background:#2b5278;">+ Стикер из галереи</button>
+    </div>
+
+    <div id="messages">
+      <div id="wallLayer"></div>
+    </div>
+    
+    <div class="input-bar">
+      <div class="attach-menu" id="attachMenu">
+        <button onclick="pickPhoto(); closeAttachMenu();">📷</button>
+        <button onclick="toggleRecorder(); closeAttachMenu();">🎤</button>
+        <button onclick="toggleVideoRecorder(); closeAttachMenu();">📹</button>
+        <button onclick="toggleStickers(); closeAttachMenu();">😀</button>
+      </div>
+      
+      <button onclick="toggleAttachMenu(event)" style="background:var(--bg3);">➕</button>
+      <input id="msgInput" placeholder="Сообщение..." oninput="onTyping()" dir="ltr">
+      <button onclick="send()" class="send-btn">➤</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="galleryInput" accept="image/*" class="hidden" onchange="uploadStickerFromGallery(event)">
+<input type="file" id="wallpaperInput" accept="image/*" class="hidden" onchange="uploadWallpaper(event)">
+<input type="file" id="avatarGalleryInput" accept="image/*" class="hidden" onchange="uploadAvatar(event)">
+
+<div class="modal" id="searchModal">
+  <div class="modal-box">
+    <h3>Поиск по нику</h3>
+    <input id="searchInput" placeholder="Введите ник..." oninput="doSearch()" dir="ltr">
+    <div id="searchResults"></div>
+    <button onclick="closeModal('searchModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="profileModal">
+  <div class="modal-box">
+    <div class="profile-header">
+      <div class="profile-avatar" id="profAvatar"></div>
+      <h3 id="profNick"></h3>
+      <div id="profStatus" style="color:var(--muted);"></div>
+      <div id="profStars" style="color:#f5c518;"></div>
+    </div>
+    <div id="profBio" style="margin-bottom:10px;"></div>
+    <div id="profGifts" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+    <div id="profEdit" class="hidden">
+      <input id="editBio" placeholder="О себе">
+      <button onclick="document.getElementById('avatarGalleryInput').click()" style="background:#2563eb; margin-bottom:10px;">📸 Загрузить аватар из галереи</button>
+      <button onclick="saveProfile()">Сохранить</button>
+    </div>
+    <button id="profMsgBtn" class="hidden" onclick="messageProfile()">Написать</button>
+    <button onclick="closeModal('profileModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="themeModal">
+  <div class="modal-box">
+    <h3>Тема чата</h3>
+    <div class="theme-row">
+      <button onclick="setChatTheme('default')">По умолчанию</button>
+      <button onclick="setChatTheme('blue')" style="background:#1e3a8a;">Синяя</button>
+      <button onclick="setChatTheme('green')" style="background:#14532d;">Зелёная</button>
+      <button onclick="setChatTheme('purple')" style="background:#4c1d95;">Фиолетовая</button>
+      <button onclick="setChatTheme('pink')" style="background:#831843;">Розовая</button>
+    </div>
+    <button onclick="closeModal('themeModal')" style="background:var(--bg3); margin-top:15px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="wallModal">
+  <div class="modal-box">
+    <h3>Обои чата</h3>
+    <div class="theme-row" style="margin-bottom: 15px;">
+      <button onclick="setWall('dots')">Точки</button>
+      <button onclick="setWall('grid')">Сетка</button>
+      <button onclick="setWall('waves')">Волны</button>
+      <button onclick="setWall('hearts')">Сердечки</button>
+      <button onclick="setWall('none')" style="background:#6b7280;">Без обоев</button>
+    </div>
+    <button onclick="document.getElementById('wallpaperInput').click()" style="background:#2563eb; margin-bottom:15px;">📸 Загрузить из галереи</button>
+    <div style="margin-top:10px;">
+      <label style="display:block; margin-bottom:5px; font-size:14px;">Размытость фона: <span id="blurVal">0</span>px</label>
+      <input type="range" id="blurSlider" min="0" max="20" value="0" oninput="onBlurChange(this.value)" style="width:100%;">
+    </div>
+    <button onclick="closeModal('wallModal')" style="background:var(--bg3); margin-top:15px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="bubbleModal">
+  <div class="modal-box">
+    <h3>Скин пузырей</h3>
+    <div class="theme-row">
+      <button onclick="setBubble('default')">Классика</button>
+      <button onclick="setBubble('round')" style="background:#2563eb;">Круглые</button>
+      <button onclick="setBubble('sharp')" style="background:#6b7280;">Острые</button>
+      <button onclick="setBubble('neon')" style="background:#111; color:#00ffcc; border:1px solid #00ffcc;">Неон</button>
+      <button onclick="setBubble('paper')" style="background:#fdf6e3; color:#333;">Бумага</button>
+      <button onclick="setBubble('glass')" style="background:rgba(43,82,120,0.6); border:1px solid #fff;">Стекло</button>
+      <button onclick="setBubble('gold')" style="background:#f5c518; color:#1a1a1a;">Золото</button>
+      <button onclick="setBubble('sakura')" style="background:#ffb7c5; color:#4a1525;">Сакура</button>
+      <button onclick="setBubble('matrix')" style="background:#000; color:#0f0; border:1px solid #0f0; font-family:monospace;">Матрица</button>
+    </div>
+    <button onclick="closeModal('bubbleModal')" style="background:var(--bg3); margin-top:15px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="giftsModal">
+  <div class="modal-box">
+    <h3>Нейрон Подарки</h3>
+    <div id="starsBalance" style="font-size:18px; margin-bottom:10px;"></div>
+    <div id="giftsGrid" style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px;"></div>
+    <button onclick="openGame()" style="background:#f5c518; color:#000; margin-top:15px;">🎮 Играть (Neuron Games)</button>
+    <button onclick="giveStarsPrompt()" style="background:#2563eb; margin-top:10px;">Подарить звёзды</button>
+    <button onclick="giveGiftPrompt()" style="background:#db2777; margin-top:10px;">Подарить подарок</button>
+    <button onclick="closeModal('giftsModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="gameModal">
+  <div class="modal-box">
+    <h3>Neuron Games</h3>
+    <div id="gameTimer" style="font-size:16px; margin-bottom:10px;"></div>
+    <div id="gameScore" style="font-size:16px; margin-bottom:10px;"></div>
+    <div class="game-area" id="gameArea"></div>
+    <button onclick="closeModal('gameModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="devModal">
+  <div class="modal-box">
+    <h3>DEV Панель</h3>
+    <div style="margin-bottom:15px; border-bottom:1px solid var(--border); padding-bottom:15px;">
+      <h4>Выдать звёзды</h4>
+      <input id="devStarsTarget" placeholder="Ник получателя" style="margin-bottom:5px;">
+      <input id="devStarsAmount" type="number" placeholder="Кол-во звёзд" style="margin-bottom:5px;">
+      <button onclick="devGiveStars()" style="background:#f5c518; color:#000;">Выдать</button>
+    </div>
+    <div id="devContent"></div>
+    <button onclick="closeModal('devModal')" style="background:var(--bg3); margin-top:10px;">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal" id="callModal">
+  <div id="callTitle">Звонок</div>
+  <div id="callSplit" style="display:flex; width:100%; height:100%;">
+    <div style="flex:1; position:relative; background:#111;">
+      <video id="remoteVideo" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+      <div style="position:absolute; bottom:10px; left:10px; color:#fff; background:rgba(0,0,0,0.5); padding:4px 8px; border-radius:6px; font-size:12px;">Собеседник</div>
+    </div>
+    <div style="flex:1; position:relative; background:#000;">
+      <video id="localVideo" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+      <div style="position:absolute; bottom:10px; left:10px; color:#fff; background:rgba(0,0,0,0.5); padding:4px 8px; border-radius:6px; font-size:12px;">Вы</div>
+    </div>
+  </div>
+  <div style="position:absolute; bottom:20px; left:0; right:0; display:flex; justify-content:center; gap:15px; z-index:10;">
+    <button onclick="switchCallMode()" id="switchModeBtn" style="background:#2563eb; border-radius:50%; width:60px; height:60px; font-size:24px;">📹</button>
+    <button onclick="endCall()" style="background:#7a2b2b; border-radius:50%; width:70px; height:70px; font-size:26px;">📞</button>
+  </div>
+</div>
+
+<div class="modal" id="videoNoteModal">
+  <div style="position:relative; width:100%; height:100%; background:#000; display:flex; align-items:center; justify-content:center;">
+    <video id="videoNotePreview" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+    <div style="position:absolute; bottom:30px; display:flex; gap:20px; z-index:10;">
+      <button onclick="flipVideoNoteCamera()" style="background:#333; border-radius:50%; width:60px; height:60px; font-size:24px;">🔄</button>
+      <button onclick="startVideoNoteRecording()" id="videoNoteRecBtn" style="background:#7a2b2b; border-radius:50%; width:80px; height:80px; font-size:28px;">⚪</button>
+      <button onclick="cancelVideoNote()" style="background:#555; border-radius:50%; width:60px; height:60px; font-size:24px;">✕</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let myNick = "", currentChatId = "", currentChatTarget = "";
+let myStream = null, peerConnection = null, replyingToId = null;
+let isLightTheme = false;
+let myBubble = 'default';
+
+function toggleAttachMenu(e) {
+  e.stopPropagation();
+  document.getElementById('attachMenu').classList.toggle('show');
+}
+function closeAttachMenu() {
+  document.getElementById('attachMenu').classList.remove('show');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('attachMenu');
+  const btn = document.querySelector('.input-bar button[onclick*="toggleAttachMenu"]');
+  if (menu.classList.contains('show') && !menu.contains(e.target) && e.target !== btn) {
+    closeAttachMenu();
+  }
+});
+
+async function doAuth(path) {
+  const nick = document.getElementById('nick').value.trim();
+  const password = document.getElementById('password').value;
+  const err = document.getElementById('error');
+  err.innerText = '';
+  try {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nick, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { err.innerText = data.error || 'Ошибка'; return; }
+    onLoggedIn(data.nick);
+  } catch (e) { err.innerText = 'Сеть недоступна'; }
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/me');
+    const data = await res.json();
+    if (data.nick) onLoggedIn(data.nick);
+  } catch (e) {}
+}
+
+function onLoggedIn(nick) {
+  myNick = nick;
+  socket.emit('login_nick', nick);
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  if (myNick === "keshaneironchik") document.getElementById('devBtn').classList.remove('hidden');
+  socket.emit('get_chats');
+  socket.emit('get_stickers');
+  socket.emit('get_profile', nick);
+}
+
+socket.on('logged_in', (nick) => { myNick = nick; });
+
+function toggleTheme() {
+  isLightTheme = !isLightTheme;
+  document.body.classList.toggle('light', isLightTheme);
+}
+
+function onTyping() { socket.emit('typing', currentChatId); }
+socket.on('user_typing', ({ chatId }) => {
+  if (currentChatId === chatId) {
+    const bio = document.getElementById('chatBio');
+    bio.innerText = "печатает...";
+    clearTimeout(bio.timer);
+    bio.timer = setTimeout(() => bio.innerText = "в сети", 2000);
+  }
+});
+
+function toggleStickers() {
+  document.getElementById('stickerPanel').classList.toggle('show');
+}
+socket.on('stickers_list', (stickers) => {
+  const panel = document.getElementById('stickerPanel');
+  panel.innerHTML = '<button onclick="addNewSticker()" style="grid-column: span 4; background:#2b5278;">+ Стикер из галереи</button>';
+  stickers.forEach(s => {
+    const img = document.createElement('img');
+    img.src = s.url;
+    img.onclick = () => sendSticker(s.url);
+    panel.appendChild(img);
+  });
+});
+function addNewSticker() { document.getElementById('galleryInput').click(); }
+
+async function uploadStickerFromGallery(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.url) { socket.emit('add_sticker', data.url); alert('Стикер добавлен!'); }
+  e.target.value = '';
+}
+function sendSticker(url) {
+  if (!currentChatId) return;
+  socket.emit('send_message', { chatId: currentChatId, type: 'sticker', file_url: url });
+}
+
+function pickPhoto() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.url && currentChatId) socket.emit('send_message', { chatId: currentChatId, type: 'image', file_url: data.url });
+  };
+  input.click();
+}
+
+async function uploadWallpaper(e) {
+  const file = e.target.files[0];
+  if (!file || !currentChatId) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.url) {
+    socket.emit('set_custom_wall', { chatId: currentChatId, url: data.url });
+    closeModal('wallModal');
+  }
+  e.target.value = '';
+}
+
+function onBlurChange(val) {
+  document.getElementById('blurVal').innerText = val;
+  if (currentChatId) socket.emit('set_wall_blur', { chatId: currentChatId, blur: parseInt(val) });
+  document.getElementById('wallLayer').style.filter = `blur(${val}px)`;
+}
+
+let mediaRecorder = null, chunks = [];
+
+async function toggleRecorder() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    chunks = [];
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      await sendMedia(blob, 'voice', '.webm');
+    };
+    mediaRecorder.start();
+    alert('Идёт запись голосового... Нажмите еще раз, чтобы остановить.');
+  } catch (e) { alert('Нет доступа к микрофону'); }
+}
+
+let videoNoteStream = null, videoNoteRecorder = null, videoNoteChunks = [], videoNoteFacing = 'user';
+
+async function toggleVideoRecorder() {
+  document.getElementById('videoNoteModal').classList.add('show');
+  await openVideoNoteCamera();
+}
+
+async function openVideoNoteCamera() {
+  if (videoNoteStream) videoNoteStream.getTracks().forEach(t => t.stop());
+  try {
+    videoNoteStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: videoNoteFacing },
+      audio: true
+    });
+    document.getElementById('videoNotePreview').srcObject = videoNoteStream;
+  } catch (e) { alert('Нет доступа к камере'); }
+}
+
+async function flipVideoNoteCamera() {
+  videoNoteFacing = videoNoteFacing === 'user' ? 'environment' : 'user';
+  await openVideoNoteCamera();
+}
+
+function startVideoNoteRecording() {
+  if (!videoNoteStream) return;
+  videoNoteChunks = [];
+  videoNoteRecorder = new MediaRecorder(videoNoteStream);
+  videoNoteRecorder.ondataavailable = e => videoNoteChunks.push(e.data);
+  videoNoteRecorder.onstop = async () => {
+    const blob = new Blob(videoNoteChunks, { type: 'video/webm' });
+    await sendMedia(blob, 'video_note', '.webm');
+    cancelVideoNote();
+  };
+  videoNoteRecorder.start();
+  document.getElementById('videoNoteRecBtn').innerText = '⏹';
+  document.getElementById('videoNoteRecBtn').onclick = () => videoNoteRecorder.stop();
+}
+
+function cancelVideoNote() {
+  document.getElementById('videoNoteModal').classList.remove('show');
+  if (videoNoteRecorder && videoNoteRecorder.state === 'recording') videoNoteRecorder.stop();
+  if (videoNoteStream) { videoNoteStream.getTracks().forEach(t => t.stop()); videoNoteStream = null; }
+  document.getElementById('videoNoteRecBtn').innerText = '⚪';
+  document.getElementById('videoNoteRecBtn').onclick = startVideoNoteRecording;
+}
+
+async function sendMedia(blob, type, ext) {
+  const fd = new FormData();
+  fd.append('file', blob, type + '_' + Date.now() + ext);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.url && currentChatId) socket.emit('send_message', { chatId: currentChatId, type, file_url: data.url });
+}
+
+socket.on('chats_list', (chats) => {
+  const box = document.getElementById('chatList');
+  box.innerHTML = "";
+  chats.forEach(c => {
+    const div = document.createElement('div');
+    div.className = "chat-item";
+    div.onclick = () => openChat(c.id, c.name, c.bio, c.members, c.wallpaper);
+    div.innerHTML = `
+      <div class="avatar">${c.name.charAt(0).toUpperCase()} ${c.isOnline ? '<div class="online-dot"></div>' : ''}</div>
+      <div class="chat-info">
+        <div class="chat-name">${c.name} ${c.type === 'bot' ? '🤖' : c.type === 'group' ? '👥' : ''}</div>
+        <div class="chat-last">${c.bio || ''}</div>
+      </div>
+    `;
+    box.appendChild(div);
+  });
+});
+
+function openSearch() { document.getElementById('searchModal').classList.add('show'); }
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (q.length > 1) socket.emit('search_users', q);
+}
+socket.on('search_results', (users) => {
+  const box = document.getElementById('searchResults');
+  box.innerHTML = "";
+  users.forEach(u => {
+    const div = document.createElement('div');
+    div.className = "chat-item";
+    div.innerHTML = `<div class="avatar">${u.nick.charAt(0).toUpperCase()}</div><div>${u.nick}</div>`;
+    div.onclick = () => { socket.emit('create_chat', { type: 'chat', name: u.nick, target: u.nick }); closeModal('searchModal'); };
+    box.appendChild(div);
+  });
+});
+
+function createGroup() { const name = prompt("Название группы:"); if (name) socket.emit('create_chat', { type: 'group', name }); }
+socket.on('chat_created', () => socket.emit('get_chats'));
+
+function openChat(id, name, bio, members, wallpaper) {
+  currentChatId = id;
+  currentChatTarget = members ? members.split(',').find(m => m !== myNick && m !== 'system') : "";
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  document.getElementById('chatWith').innerText = name;
+  document.getElementById('chatBio').innerText = bio || 'в сети';
+  document.getElementById('chatAvatar').innerHTML = name.charAt(0).toUpperCase();
+  socket.emit('join_chat', id);
+}
+
+socket.on('chat_wall_settings', ({ custom_wall, wall_blur, wallpaper }) => {
+  const layer = document.getElementById('wallLayer');
+  if (custom_wall) {
+    layer.style.backgroundImage = `url('${custom_wall}')`;
+    layer.style.filter = `blur(${wall_blur}px)`;
+    document.getElementById('blurSlider').value = wall_blur;
+    document.getElementById('blurVal').innerText = wall_blur;
+  } else {
+    applyWall(wallpaper || 'dots');
+  }
+});
+
+socket.on('wallpaper_changed', ({ chatId, custom_wall, wallpaper, wall_blur }) => {
+  if (chatId !== currentChatId) return;
+  const layer = document.getElementById('wallLayer');
+  if (custom_wall) {
+    layer.style.backgroundImage = `url('${custom_wall}')`;
+    layer.style.filter = `blur(${wall_blur || 0}px)`;
+  } else {
+    applyWall(wallpaper);
+  }
+});
+
+socket.on('wall_blur_changed', ({ chatId, blur }) => {
+  if (chatId !== currentChatId) return;
+  document.getElementById('wallLayer').style.filter = `blur(${blur}px)`;
+  document.getElementById('blurSlider').value = blur;
+  document.getElementById('blurVal').innerText = blur;
+});
+
+socket.on('messages_history', (msgs) => {
+  const box = document.getElementById('messages');
+  box.innerHTML = '<div id="wallLayer"></div>';
+  msgs.forEach(m => renderMsg(m));
+});
+
+socket.on('new_message', (m) => {
+  if (currentChatId === m.chat_id) renderMsg(m);
+});
+
+function renderMsg(m) {
+  const box = document.getElementById('messages');
+  const div = document.createElement('div');
+  const isMe = m.sender === myNick;
+  div.className = 'msg ' + (isMe ? 'me' : 'them') + ' bubble-' + (isMe ? myBubble : 'default');
+  div.id = 'msg_' + m.id;
+
+  let pressTimer;
+  div.addEventListener('touchstart', () => { pressTimer = setTimeout(() => showActions(m.id), 500); });
+  div.addEventListener('touchend', () => clearTimeout(pressTimer));
+  div.addEventListener('mousedown', () => { pressTimer = setTimeout(() => showActions(m.id), 500); });
+  div.addEventListener('mouseup', () => clearTimeout(pressTimer));
+
+  let content = '';
+  if (!isMe) content += `<div class="sender" onclick="openProfile('${m.sender}')">${m.sender}</div>`;
+  
+  if (m.pinned) content += `<div style="font-size:10px; color:#f5c518; margin-bottom:2px;">📌 Закреплено</div>`;
+  if (m.reply_to) content += `<div class="reply-quote">Ответ на сообщение</div>`;
+  
+  if (m.type === 'sticker' && m.file_url) content += `<img class="sticker" src="${m.file_url}">`;
+  else if (m.type === 'image' && m.file_url) content += `<img src="${m.file_url}" style="max-width:220px; border-radius:10px;">`;
+  else if (m.type === 'voice' && m.file_url) content += `<audio controls src="${m.file_url}" style="max-width:200px;"></audio>`;
+  else if (m.type === 'video_note' && m.file_url) content += `<video controls src="${m.file_url}" style="width:200px; height:200px; border-radius:50%; object-fit:cover;"></video>`;
+  else if (m.type === 'gift') content += `<div style="font-size:32px;">${m.text}</div>`;
+  else content += `<div>${m.text}</div>`;
+
+  if (m.ts) {
+    const d = new Date(m.ts);
+    const timeStr = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    content += `<div style="font-size:10px; color:rgba(255,255,255,0.6); text-align:right; margin-top:4px;">${timeStr}</div>`;
+  }
+
+  let reactionsHtml = '';
+  if (m.reactions) {
+    const rs = typeof m.reactions === 'string' ? JSON.parse(m.reactions) : m.reactions;
+    reactionsHtml = `<div class="reactions">${Object.values(rs).map(r => `<span>${r}</span>`).join('')}</div>`;
+  }
+  div.innerHTML = content + reactionsHtml;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showActions(msgId) {
+  const old = document.getElementById('msgActionMenu');
+  if (old) old.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'msgActionMenu';
+  menu.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--bg2); border:1px solid var(--border); border-radius:12px; display:flex; gap:5px; padding:10px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+  
+  const actions = [
+    { icon: '↩️', label: 'Ответить', action: () => { replyingToId = msgId; alert('Напишите ответ'); menu.remove(); } },
+    { icon: '❤️', label: 'Реакция', action: () => { const r = prompt('Эмодзи:'); if(r) socket.emit('add_reaction', { chatId: currentChatId, msgId, reaction: r }); menu.remove(); } },
+    { icon: '📌', label: 'Закрепить', action: () => { socket.emit('pin_message', { chatId: currentChatId, msgId }); menu.remove(); } },
+    { icon: '🗑️', label: 'Удалить', action: () => { if(confirm('Удалить?')) socket.emit('delete_message', { chatId: currentChatId, msgId }); menu.remove(); } }
+  ];
+
+  actions.forEach(a => {
+    const btn = document.createElement('button');
+    btn.innerHTML = `<div style="font-size:20px;">${a.icon}</div><div style="font-size:10px;">${a.label}</div>`;
+    btn.style.cssText = 'background:transparent; color:var(--text); width:60px; height:60px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:8px; margin:0;';
+    btn.onclick = a.action;
+    menu.appendChild(btn);
+  });
+
+  document.body.appendChild(menu);
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+    });
+  }, 100);
+}
+
+socket.on('message_reaction', ({ msgId, reactions }) => {
+  const el = document.getElementById('msg_' + msgId);
+  if (el) {
+    let reactionsHtml = `<div class="reactions">${Object.values(reactions).map(r => `<span>${r}</span>`).join('')}</div>`;
+    if (el.querySelector('.reactions')) el.querySelector('.reactions').outerHTML = reactionsHtml;
+    else el.innerHTML += reactionsHtml;
+  }
+});
+socket.on('message_deleted', (msgId) => document.getElementById('msg_' + msgId)?.remove());
+
+function send() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim().normalize('NFC');
+  if (!text || !currentChatId) return;
+  socket.emit('send_message', { chatId: currentChatId, text: text, type: 'text', reply_to: replyingToId });
+  input.value = ""; replyingToId = null;
+}
+
+function backToList() {
+  currentChatId = "";
+  document.getElementById('chatScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+  socket.emit('get_chats');
+}
+
+function openProfile(nick) {
+  socket.emit('get_profile', nick);
+  document.getElementById('profileModal').classList.add('show');
+}
+socket.on('profile_data', (p) => {
+  if (!p) return;
+  const av = document.getElementById('profAvatar');
+  av.innerHTML = p.avatar ? `<img src="${p.avatar}">` : p.nick.charAt(0).toUpperCase();
+  document.getElementById('profNick').innerText = p.nick;
+  document.getElementById('profStatus').innerText = p.online ? 'в сети' : 'не в сети';
+  document.getElementById('profStars').innerText = '⭐ ' + (p.stars || 0);
+  document.getElementById('profBio').innerText = p.bio || '';
+  const pg = document.getElementById('profGifts');
+  if (pg) pg.innerHTML = (p.gifts || []).map(g => `<span title="${g.name} от ${g.from_nick}" style="font-size:28px;">${g.emoji}</span>`).join('');
+
+  const isMine = p.nick === myNick;
+  document.getElementById('profEdit').classList.toggle('hidden', !isMine);
+  document.getElementById('profMsgBtn').classList.toggle('hidden', isMine);
+  if (isMine) {
+    document.getElementById('editBio').value = p.bio || '';
+    myBubble = p.bubble || 'default';
+  }
+});
+function saveProfile() {
+  socket.emit('update_profile', {
+    bio: document.getElementById('editBio').value,
+    avatar: document.getElementById('profAvatar').querySelector('img')?.src || '',
+    bubble: myBubble
+  });
+}
+socket.on('profile_updated', () => { closeModal('profileModal'); alert('Сохранено'); });
+function messageProfile() {
+  const nick = document.getElementById('profNick').innerText;
+  socket.emit('create_chat', { type: 'chat', name: nick, target: nick });
+  closeModal('profileModal');
+}
+
+async function uploadAvatar(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.url) {
+    document.getElementById('profAvatar').innerHTML = `<img src="${data.url}">`;
+    socket.emit('update_profile', {
+      bio: document.getElementById('editBio').value,
+      avatar: data.url,
+      bubble: myBubble
+    });
+  }
+  e.target.value = '';
+}
+
+function openChatTheme() { document.getElementById('themeModal').classList.add('show'); }
+function setChatTheme(theme) {
+  if (currentChatId) socket.emit('set_chat_theme', { chatId: currentChatId, theme });
+  closeModal('themeModal');
+  applyChatTheme(theme);
+}
+function applyChatTheme(theme) {
+  const colors = { default: null, blue: '#1e3a8a', green: '#14532d', purple: '#4c1d95', pink: '#831843' };
+  document.getElementById('messages').style.background = colors[theme] || '';
+}
+socket.on('chat_theme_changed', ({ theme }) => applyChatTheme(theme));
+
+function openBubblePicker() { document.getElementById('bubbleModal').classList.add('show'); }
+function setBubble(b) {
+  myBubble = b;
+  socket.emit('set_bubble', b);
+  document.querySelectorAll('.msg.me').forEach(el => {
+    el.className = el.className.replace(/bubble-\w+/g, '').trim();
+    el.classList.add('bubble-' + b);
+  });
+  closeModal('bubbleModal');
+}
+socket.on('bubble_updated', (b) => { myBubble = b; });
+
+const WALLS = {
+  dots: "radial-gradient(circle at 20% 30%, rgba(88,166,255,0.10) 0 2px, transparent 3px), radial-gradient(circle at 80% 70%, rgba(88,166,255,0.10) 0 2px, transparent 3px)",
+  grid: "linear-gradient(rgba(88,166,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(88,166,255,0.08) 1px, transparent 1px)",
+  waves: "repeating-linear-gradient(45deg, rgba(88,166,255,0.08) 0 10px, transparent 10px 20px)",
+  hearts: "radial-gradient(circle at 30% 30%, rgba(255,102,204,0.12) 0 3px, transparent 4px), radial-gradient(circle at 70% 70%, rgba(255,102,204,0.12) 0 3px, transparent 4px)",
+  none: "none"
+};
+const WALL_SIZES = { dots: "60px 60px, 80px 80px", grid: "30px 30px, 30px 30px", waves: "auto", hearts: "70px 70px, 90px 90px", none: "auto" };
+function applyWall(w) {
+  const layer = document.getElementById('wallLayer');
+  if (!layer) return;
+  layer.style.backgroundImage = WALLS[w] || WALLS.dots;
+  layer.style.backgroundSize = WALL_SIZES[w] || "";
+  layer.style.filter = "none";
+}
+function setWall(w) {
+  if (currentChatId) socket.emit('set_wallpaper', { chatId: currentChatId, wallpaper: w });
+  applyWall(w);
+  closeModal('wallModal');
+}
+
+function openGifts() { document.getElementById('giftsModal').classList.add('show'); socket.emit('get_gifts'); }
+socket.on('gifts_data', ({ gifts, mine, stars }) => {
+  document.getElementById('starsBalance').innerText = '⭐ Звёзды: ' + stars;
+  const grid = document.getElementById('giftsGrid');
+  grid.innerHTML = '';
+  gifts.forEach(g => {
+    const btn = document.createElement('button');
+    btn.innerHTML = `${g.emoji} ${g.name}<br><small>${g.price} ⭐</small>`;
+    btn.onclick = () => socket.emit('buy_gift', g.id);
+    grid.appendChild(btn);
+  });
+});
+socket.on('gift_bought', () => { alert('Подарок куплен!'); socket.emit('get_gifts'); });
+socket.on('gift_sent', (to) => { alert('Подарок отправлен ' + to); socket.emit('get_gifts'); });
+socket.on('gift_error', (m) => alert(m));
+socket.on('stars_sent', ({ to, amount }) => alert(`Отправлено ${amount} ⭐ игроку ${to}`));
+
+function giveStarsPrompt() {
+  const to = prompt('Кому подарить звёзды? (ник)') || '';
+  const amount = parseInt(prompt('Сколько звёзд?') || '0');
+  if (to && amount > 0) socket.emit('give_stars', { to, amount });
+}
+function giveGiftPrompt() {
+  const to = prompt('Кому подарить подарок? (ник)') || '';
+  const giftId = prompt('ID подарка (rose, heart, bear...)') || '';
+  if (to && giftId) socket.emit('give_gift', { to, giftId });
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function logout() { location.reload(); }
+function openDevPanel() { document.getElementById('devModal').classList.add('show'); }
+function devGiveStars() {
+  const target = document.getElementById('devStarsTarget').value.trim();
+  const amount = parseInt(document.getElementById('devStarsAmount').value);
+  if (target && amount > 0) { socket.emit('add_stars', { nick: target, amount }); alert('Звезды выданы!'); }
+}
+</script>
+</body>
+</html>
